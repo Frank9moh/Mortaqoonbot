@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إرسال الرسائل إلى Telegram</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            direction: rtl;
+            text-align: center;
+            margin-top: 50px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        #message {
+            font-size: 24px;
+            color: #28a745;
+            margin-top: 20px;
+        }
+        h1 {
+            color: #555;
+        }
+        .error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+
+<h1>إرسال الرسائل تلقائيًا إلى Telegram</h1>
+<div id="message">جاري معالجة الرسائل...</div>
+
+<script>
+    // دالة لتحديد الفترة الزمنية (صباح - مساء) أو (صباح - ظهر - مساء)
+    function getCurrentTimePart(totalParts) {
+        const currentHour = new Date().getHours();
+
+        if (totalParts === 2) {
+            // إذا كانت الرسائل أقل من 3 (فترتين فقط)
+            if (currentHour >= 6 && currentHour < 18) {
+                return 1; // الصباح
+            } else {
+                return 2; // المساء
+            }
+        } else {
+            // إذا كانت الرسائل 3 أو أكثر (ثلاث فترات)
+            if (currentHour >= 6 && currentHour < 12) {
+                return 1; // الصباح
+            } else if (currentHour >= 12 && currentHour < 18) {
+                return 2; // الظهر
+            } else {
+                return 3; // المساء
+            }
+        }
+    }
+
+    // دالة تقسيم الرسائل إلى أجزاء بناءً على العدد
+    function splitMessages(messages) {
+        const totalMessages = messages.length;
+        if (totalMessages === 0) {
+            throw new Error("لا توجد رسائل متاحة.");
+        }
+
+        if (totalMessages < 3) {
+            // إذا كانت أقل من 3 رسائل، تقسيمها على فترتين فقط
+            const splitSize = Math.ceil(totalMessages / 2);
+            const firstPart = messages.slice(0, splitSize);
+            const secondPart = messages.slice(splitSize);
+
+            return [firstPart, secondPart]; // جزئين فقط
+        } else {
+            // إذا كانت 3 أو أكثر، تقسيمها على ثلاث فترات
+            const splitSize = Math.ceil(totalMessages / 3);
+            const firstPart = messages.slice(0, splitSize);
+            const secondPart = messages.slice(splitSize, splitSize * 2);
+            const thirdPart = messages.slice(splitSize * 2);
+
+            return [firstPart, secondPart, thirdPart];
+        }
+    }
+
+    // دالة لإرسال الرسالة إلى Telegram
+    async function sendToTelegram(messages) {
+        const chatId = '1256293459';  // ضع معرف الشات الخاص بك
+        const botToken = '7458060169:AAG7-MfOXwzUqiNNdA2X2tckOik0_XQWnRo'; // ضع توكن بوت تلجرام الخاص بك
+
+        const messageText = messages.join('\n'); // دمج الرسائل في نص واحد
+        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+        const formData = new URLSearchParams({
+            chat_id: chatId,
+            text: messageText
+        });
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: formData,
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(`Telegram API Error: ${result.description || 'Unknown error'}`);
+            }
+
+            return result;
+        } catch (error) {
+            console.error("Error sending to Telegram:", error);
+            throw new Error("فشل في إرسال الرسائل إلى Telegram.");
+        }
+    }
+
+// دالة لجلب الرسائل من ملف JSON والتحقق من تاريخ اليوم ولكن من السنة الماضية
+async function fetchMessagesForToday() {
+    try {
+        const response = await fetch('messages.json'); // افتراض أن ملف الرسائل في نفس السيرفر
+        if (!response.ok) {
+            throw new Error('خطأ في جلب الرسائل من السيرفر');
+        }
+        const data = await response.json();
+
+        // الحصول على تاريخ اليوم لكن من السنة الماضية
+        const today = new Date();
+        const lastYear = today.getFullYear() - 1; // حساب السنة الماضية
+        const lastYearDate = new Date(lastYear, today.getMonth(), today.getDate()).toISOString().split('T')[0]; // استخدام نفس اليوم والشهر
+
+        console.log("التاريخ الخاص بالسنة الماضية: ", lastYearDate); // عرض التاريخ الخاص بالسنة الماضية في وحدة التحكم
+
+        // البحث عن الرسائل الخاصة بتاريخ السنة الماضية
+        const todayMessages = data.find(record => record.date === lastYearDate);
+        console.log("الرسائل الخاصة بتاريخ السنة الماضية:", todayMessages); // عرض الرسائل الخاصة بتاريخ السنة الماضية
+
+        if (!todayMessages || !Array.isArray(todayMessages.messages)) {
+            throw new Error('لا توجد رسائل للسنة الماضية في هذا اليوم أو تنسيق البيانات غير صحيح.');
+        }
+
+        return todayMessages.messages;
+    } catch (error) {
+        console.error("Error fetching messages:", error);
+        throw new Error('فشل في جلب الرسائل.');
+    }
+}
+    // الدالة الرئيسية التي تجمع كل العمليات
+    async function main() {
+        const messageElement = document.getElementById('message');
+
+        try {
+            const messages = await fetchMessagesForToday(); // جلب رسائل اليوم
+
+            // تقسيم الرسائل إلى أجزاء
+            const splitMessagesArray = splitMessages(messages);
+
+            // تحديد الفترة الزمنية بناءً على عدد الرسائل
+            const timePart = getCurrentTimePart(splitMessagesArray.length);
+            let selectedMessages = splitMessagesArray[timePart - 1];
+
+            // إرسال الرسائل المحددة بناءً على الوقت
+            await sendToTelegram(selectedMessages);
+            messageElement.innerText = "تم إرسال الرسائل بنجاح.";
+        } catch (error) {
+            messageElement.innerText = error.message;
+            messageElement.classList.add('error'); // إضافة نمط خاص بالأخطاء
+        }
+    }
+
+    // تنفيذ الدالة الرئيسية عند تحميل الصفحة
+    window.onload = main;
+</script>
+
+</body>
+</html>
